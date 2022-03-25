@@ -1,0 +1,84 @@
+#!/bin/sh -e
+#L:
+#L:  MIT License
+#L:  
+#l:  Bug reports, feature requests to gemini|https://harkadev.com/oss
+#l:  Copyright (c) 2022 Harkaitz Agirre, harkaitz.aguirre@gmail.com
+#L:
+#L:  Permission is hereby granted, free of charge, to any person obtaining
+#L:  a copy of this software and associated documentation files (the
+#L:  "Software"), to deal in the Software without restriction, including
+#L:  without limitation the rights to use, copy, modify, merge, publish,
+#L:  distribute, sublicense, and/or sell copies of the Software, and to
+#L:  permit persons to whom the Software is furnished to do so, subject to
+#L:  the following conditions:
+#L:
+#L:  The above copyright notice and this permission notice shall be
+#L:  included in all copies or substantial portions of the Software.
+#L:
+#L:  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+#L:  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+#L:  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+#L:  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+#L:  LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+#L:  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+#L:  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+##:
+#h: Usage: $0 [-v][-S][-r SSH][-s CHROOT] TAR
+#h:
+#h: Extract a tar file with `-h -o -m --no-same-permissions` in
+#h: the local or remote (-r) machine.
+tar_install() {
+    ## Parse command line arguments.
+    local OPTIND optopt= opt_r= opt_s=/ sudo= flags="-h -o -m --no-same-permissions"
+    while getopts "vSr:s:" optopt;do # OPTARG
+        case $optopt in
+            v)  local flags="${flags} -v" ;;
+            S)  local sudo=sudo           ;;
+            r)  local opt_r="${OPTARG}"   ;;
+            s)  local opt_s="${OPTARG}"   ;;
+            \?) return 1;;
+        esac
+    done
+    shift $(( $OPTIND - 1 ))
+    local tar="$1"
+    if test ! -n "${tar}";then
+        echo "${SCRNAME}: error: Please specify a tar file." >&2
+        return 1
+    fi
+    if test ! -f "${tar}";then
+        echo "${SCRNAME}: error: File ${tar} does not exist." >&2
+        return 1
+    fi
+    if test @"${opt_r}" = @"-";then
+        local opt_r=
+    fi
+    local tar_n="`basename ${tar}`"
+    if test -n "${opt_r}";then
+        echo "${SCRNAME}: ${tar_n} -> ${opt_r}:${opt_s}/" >&2
+        ssh "${opt_r}" "
+        ${sudo} mkdir -p '${opt_s}'
+        ${sudo} tar xzf - -C '${opt_s}' ${flags}
+        " < "${tar}"
+    else
+        echo "${SCRNAME}: ${tar_n} -> ${opt_s}/" >&2
+        ${sudo} sh -c "
+        mkdir -p '${opt_s}'
+        tar xzf '${tar}' -C '${opt_s}' ${flags}
+        "
+    fi
+}
+## -----------------------------------------------------------------------------
+SCRNAME="`basename "$0"`"
+if test @"${SCRNAME}" = @"tar-install";then
+    case "${1}" in
+        ''|-h|--help)
+            sed -n 's/^ *#h: \{0,1\}//p' "$0" | sed "s|\\\$0|${SCRNAME}|g"
+            echo ""
+            sed -n 's/^ *#l: \{0,2\}//p' "$0"
+            ;;
+        *)
+            tar_install "$@"
+            ;;
+    esac
+fi
